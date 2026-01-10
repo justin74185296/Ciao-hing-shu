@@ -25,6 +25,9 @@ aiofiles>=23.2.1
 # 日期時間
 python-dateutil>=2.8.2
 
+# === Telegram Bot ===
+python-telegram-bot>=20.7
+
 # === 可選依賴 ===
 # 代理驗證
 # pysocks>=1.7.1
