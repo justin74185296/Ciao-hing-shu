@@ -1,0 +1,26 @@
+{
+  "cookies": [
+    "請在這裡填入你的小紅書 Cookie",
+    "格式: a1=xxx; web_session=xxx; webId=xxx; ...",
+    "可以添加多個 Cookie 實現帳號輪換（刪除這些說明行）"
+  ],
+  "proxies": [
+    "代理格式: http://user:pass@ip:port",
+    "留空則不使用代理（刪除這些說明行或清空此數組）"
+  ],
+  "keywords": [
+    "童裝代理",
+    "童裝一件代發 2026",
+    "韓版童裝批發招商",
+    "童裝廠家直供",
+    "童裝源頭工廠",
+    "童裝批發 一手貨源",
+    "嬰童裝代理",
+    "童裝誠招代理"
+  ],
+  "filter": {
+    "min_likes": 50,
+    "min_comments": 5,
+    "min_collects": 10
+  }
+}

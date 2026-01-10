@@ -1,0 +1,42 @@
+# 小紅書童裝供應商爬蟲 - 依賴包
+# Python 3.11+
+
+# === 核心依賴 ===
+# Playwright 瀏覽器自動化（推薦）
+playwright>=1.40.0
+playwright-stealth>=1.0.6
+
+# HTTP 請求（備用方案）
+requests>=2.31.0
+httpx>=0.25.0
+
+# === 數據處理 ===
+# Excel 導出
+openpyxl>=3.1.2
+
+# 數據分析（可選）
+pandas>=2.1.0
+
+# === 工具 ===
+# 異步支持
+aiohttp>=3.9.0
+aiofiles>=23.2.1
+
+# 日期時間
+python-dateutil>=2.8.2
+
+# === 可選依賴 ===
+# 代理驗證
+# pysocks>=1.7.1
+
+# OCR 圖片文字識別（提取圖片中的微信號）
+# pytesseract>=0.3.10
+# Pillow>=10.0.0
+
+# 驗證碼處理
+# ddddocr>=1.4.0
+
+# === 開發依賴 ===
+# pytest>=7.4.0
+# black>=23.10.0
+# flake8>=6.1.0
