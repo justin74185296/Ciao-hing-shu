@@ -600,7 +600,8 @@ class Scraper:
                 return None
             await delay(2, 4)
             
-            info = await self.page.evaluate('''() => {
+            # 使用簡化的 JavaScript，避免正則表達式問題
+            info = await self.page.evaluate("""() => {
                 const result = {nickname: '', bio: '', followers: 0, notes: 0, ip: ''};
                 
                 // 從 __INITIAL_STATE__ 獲取
@@ -631,39 +632,56 @@ class Scraper:
                     result.bio = bioEl ? bioEl.textContent.trim() : '';
                 }
                 
-                // 從頁面文本解析數據
+                // 從頁面文本解析粉絲數和筆記數
                 const pageText = document.body.innerText || '';
                 
                 if (!result.followers) {
-                    const fansMatch = pageText.match(/([\d.]+[万萬kKmM]?)\s*粉絲/);
-                    if (fansMatch) {
-                        let num = fansMatch[1];
-                        if (num.includes('万') || num.includes('萬')) {
-                            result.followers = Math.round(parseFloat(num) * 10000);
-                        } else if (num.toLowerCase().includes('k')) {
-                            result.followers = Math.round(parseFloat(num) * 1000);
-                        } else {
-                            result.followers = parseInt(num) || 0;
+                    // 嘗試找「X 粉絲」或「X粉絲」
+                    const textParts = pageText.split(/\\s+/);
+                    for (let i = 0; i < textParts.length; i++) {
+                        if (textParts[i].includes('粉絲') || textParts[i].includes('粉丝')) {
+                            // 檢查前一個詞是否是數字
+                            if (i > 0) {
+                                let numStr = textParts[i-1].replace(/[,，]/g, '');
+                                if (numStr.includes('万') || numStr.includes('萬')) {
+                                    result.followers = Math.round(parseFloat(numStr) * 10000);
+                                } else if (numStr.toLowerCase().includes('k')) {
+                                    result.followers = Math.round(parseFloat(numStr) * 1000);
+                                } else {
+                                    result.followers = parseInt(numStr) || 0;
+                                }
+                            }
+                            break;
                         }
                     }
                 }
                 
                 if (!result.notes) {
-                    const notesMatch = pageText.match(/([\d]+)\s*(?:筆記|笔记)/);
-                    if (notesMatch) {
-                        result.notes = parseInt(notesMatch[1]) || 0;
+                    const textParts = pageText.split(/\\s+/);
+                    for (let i = 0; i < textParts.length; i++) {
+                        if (textParts[i].includes('筆記') || textParts[i].includes('笔记')) {
+                            if (i > 0) {
+                                result.notes = parseInt(textParts[i-1].replace(/[,，]/g, '')) || 0;
+                            }
+                            break;
+                        }
                     }
                 }
                 
                 if (!result.ip) {
-                    const ipMatch = pageText.match(/IP(?:屬地|属地)[：:\s]*([^\s\n]+)/);
-                    if (ipMatch) {
-                        result.ip = ipMatch[1];
+                    const idx = pageText.indexOf('IP');
+                    if (idx > -1) {
+                        // 找 IP屬地: 或 IP属地: 後面的文字
+                        const after = pageText.slice(idx, idx + 30);
+                        const parts = after.split(/[：:]/);
+                        if (parts.length > 1) {
+                            result.ip = parts[1].trim().split(/\\s/)[0] || '';
+                        }
                     }
                 }
                 
                 return result;
-            }''')
+            }""")
             
             if not info.get('nickname'):
                 info['nickname'] = fallback_name
