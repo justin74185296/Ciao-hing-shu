@@ -81,6 +81,7 @@ SECRET_MESSAGES = [
 DATA_FILE = "suppliers_data.csv"
 
 # ========== 日誌 ==========
+# 設為 DEBUG 可看更多細節
 logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(message)s')
 logger = logging.getLogger()
 
@@ -417,63 +418,134 @@ class Scraper:
                 # 提取筆記卡片
                 cards = await self.page.evaluate('''() => {
                     const results = [];
-                    // 找所有筆記卡片
+                    const seen = new Set();
+                    
+                    // 方法1: 找所有筆記卡片鏈接
                     const noteLinks = document.querySelectorAll('a[href*="/explore/"]');
                     noteLinks.forEach(link => {
                         const href = link.getAttribute('href') || '';
                         const noteMatch = href.match(/\\/explore\\/([a-f0-9]+)/);
                         if (!noteMatch) return;
                         
-                        // 找到卡片容器
-                        let card = link.closest('section') || link.closest('[class*="note"]') || link.parentElement;
+                        // 找到卡片容器 - 嘗試多種方式
+                        let card = link.closest('section');
+                        if (!card) card = link.closest('[class*="note-item"]');
+                        if (!card) card = link.closest('[class*="card"]');
+                        if (!card) card = link.parentElement?.parentElement?.parentElement;
                         if (!card) return;
                         
-                        // 找作者鏈接
-                        const authorLinks = card.querySelectorAll('a[href*="/user/profile/"]');
+                        // 找作者鏈接 - 可能在卡片內或附近
                         let authorId = '', authorName = '';
+                        
+                        // 嘗試在卡片內找
+                        const authorLinks = card.querySelectorAll('a[href*="/user/profile/"]');
                         authorLinks.forEach(al => {
                             const ahref = al.getAttribute('href') || '';
                             const am = ahref.match(/\\/user\\/profile\\/([a-f0-9]+)/);
-                            if (am) {
+                            if (am && !authorId) {
                                 const txt = (al.textContent || '').trim();
-                                // 排除「我」和太短的名字
-                                if (txt && txt !== '我' && txt.length > 1) {
+                                if (txt && txt !== '我' && txt.length > 1 && txt.length < 30) {
                                     authorId = am[1];
                                     authorName = txt;
                                 }
                             }
                         });
                         
-                        if (authorId) {
+                        // 如果卡片內沒找到，嘗試從頁面狀態獲取
+                        if (!authorId) {
+                            try {
+                                const state = window.__INITIAL_STATE__;
+                                if (state) {
+                                    const noteId = noteMatch[1];
+                                    // 嘗試不同的數據路徑
+                                    const searchNotes = state.search?.notes?.items || 
+                                                       state.searchResult?.items ||
+                                                       state.feed?.items || [];
+                                    for (const item of searchNotes) {
+                                        if (item.id === noteId || item.noteCard?.noteId === noteId) {
+                                            const user = item.noteCard?.user || item.user || {};
+                                            if (user.userId) {
+                                                authorId = user.userId;
+                                                authorName = user.nickname || '';
+                                                break;
+                                            }
+                                        }
+                                    }
+                                }
+                            } catch(e) {}
+                        }
+                        
+                        if (authorId && !seen.has(authorId)) {
+                            seen.add(authorId);
                             results.push({
                                 noteId: noteMatch[1],
                                 authorId: authorId,
                                 authorName: authorName,
-                                title: card.textContent?.slice(0, 100) || ''
+                                title: (card.textContent || '').slice(0, 100).replace(/\\s+/g, ' ')
                             });
                         }
                     });
+                    
+                    // 方法2: 如果方法1沒找到作者，嘗試從 __INITIAL_STATE__ 直接獲取
+                    if (results.filter(r => r.authorId).length === 0) {
+                        try {
+                            const state = window.__INITIAL_STATE__;
+                            if (state) {
+                                const items = state.search?.notes?.items || 
+                                             state.searchResult?.items ||
+                                             state.feed?.items || [];
+                                items.forEach(item => {
+                                    const nc = item.noteCard || item;
+                                    const user = nc.user || {};
+                                    if (user.userId && !seen.has(user.userId)) {
+                                        seen.add(user.userId);
+                                        results.push({
+                                            noteId: item.id || nc.noteId || '',
+                                            authorId: user.userId,
+                                            authorName: user.nickname || '',
+                                            title: nc.displayTitle || nc.title || ''
+                                        });
+                                    }
+                                });
+                            }
+                        } catch(e) {}
+                    }
+                    
                     return results;
                 }''')
                 
                 logger.info(f"  找到 {len(cards)} 個筆記卡片")
                 
+                # 調試：顯示找到的作者ID
+                author_ids = [c.get('authorId', '') for c in cards if c.get('authorId')]
+                logger.info(f"  其中 {len(author_ids)} 個有作者ID")
+                if author_ids[:3]:
+                    logger.debug(f"  前3個作者ID: {author_ids[:3]}")
+                
                 # 處理每個卡片
+                processed = 0
                 for card in cards:
                     uid = card.get('authorId', '')
                     name = card.get('authorName', '')
                     
-                    if not uid or uid in self.seen:
+                    if not uid:
+                        continue
+                    if uid in self.seen:
                         continue
                     if self.my_uid and uid == self.my_uid:
                         continue
                     
                     self.seen.add(uid)
+                    processed += 1
                     
                     # 獲取作者詳情
+                    logger.info(f"  → 訪問作者: {name} ({uid[:8]}...)")
                     info = await self.get_author_info(uid, name)
                     if not info:
+                        logger.warning(f"    ✗ 無法獲取作者信息")
                         continue
+                    
+                    logger.info(f"    獲取到: {info.get('nickname', '?')} 粉絲:{info.get('followers', 0)} 筆記:{info.get('notes', 0)}")
                     
                     # 創建供應商
                     supplier = Supplier(
@@ -497,14 +569,19 @@ class Scraper:
                     supplier.score = calc_score(supplier)
                     
                     # 添加到數據管理器
-                    if self.dm.add(supplier):
+                    added = self.dm.add(supplier)
+                    if added:
                         found.append(supplier)
-                        logger.info(f"  ✓ {supplier.nickname} ({supplier.score}分) 微信:{supplier.wechat or '無'}")
+                        logger.info(f"    ✓ 已添加: {supplier.nickname} ({supplier.score}分) 微信:{supplier.wechat or '無'}")
+                    else:
+                        logger.info(f"    - 已存在: {supplier.nickname}")
                     
                     await delay(1, 2)
                     
                     if len(self.dm.suppliers) >= MAX_SUPPLIERS:
                         return found
+                
+                logger.info(f"  本頁處理了 {processed} 個新作者，當前共 {len(self.dm.suppliers)} 個供應商")
                 
             except Exception as e:
                 logger.error(f"搜索出錯: {e}")
@@ -517,7 +594,10 @@ class Scraper:
         """獲取作者詳細信息"""
         try:
             url = f"https://www.xiaohongshu.com/user/profile/{uid}"
-            await self.page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            resp = await self.page.goto(url, wait_until='domcontentloaded', timeout=60000)
+            if resp and resp.status >= 400:
+                logger.warning(f"    頁面返回錯誤: {resp.status}")
+                return None
             await delay(2, 4)
             
             info = await self.page.evaluate('''() => {
@@ -588,10 +668,13 @@ class Scraper:
             if not info.get('nickname'):
                 info['nickname'] = fallback_name
             
+            # 調試輸出
+            logger.debug(f"    提取結果: nickname={info.get('nickname')}, bio長度={len(info.get('bio', ''))}")
+            
             return info if info.get('nickname') else None
             
         except Exception as e:
-            logger.debug(f"獲取作者信息失敗: {e}")
+            logger.warning(f"    獲取作者信息異常: {e}")
             return None
     
     async def send_message(self, supplier: Supplier, message: str) -> bool:
