@@ -719,57 +719,110 @@ class Scraper:
             
             # 嘗試多種方式找到並點擊私信按鈕
             clicked = await self.page.evaluate("""() => {
-                // 找所有元素
-                const allElements = document.querySelectorAll('button, div, span, a');
+                // 方法1: 找所有元素，匹配私信相關文字
+                const allElements = document.querySelectorAll('button, div, span, a, li');
                 
                 for (const el of allElements) {
                     const text = (el.textContent || '').trim();
-                    // 精確匹配「私信」
-                    if (text === '私信' || text === '发私信' || text === '發私信') {
-                        // 確保元素可見
+                    // 匹配各種私信按鈕名稱
+                    if (text === '私信' || text === '发私信' || text === '發私信' || 
+                        text === '发消息' || text === '發消息' || text === '聊天') {
                         const rect = el.getBoundingClientRect();
                         if (rect.width > 0 && rect.height > 0) {
                             el.click();
-                            return {success: true, text: text};
+                            return {success: true, text: text, method: 'text'};
                         }
                     }
                 }
                 
-                // 備用: 找 class 包含相關關鍵詞的元素
-                const selectors = [
-                    '[class*="message"]',
-                    '[class*="chat"]', 
-                    '[class*="interact"]',
-                    '[class*="btn"]'
-                ];
-                
-                for (const sel of selectors) {
-                    const elements = document.querySelectorAll(sel);
-                    for (const el of elements) {
-                        const text = (el.textContent || '').trim();
-                        if (text.includes('私信') && text.length < 10) {
-                            el.click();
-                            return {success: true, text: text, selector: sel};
+                // 方法2: 找用戶操作區域 (關注按鈕旁邊通常有私信)
+                const followBtn = Array.from(document.querySelectorAll('button, div, span')).find(
+                    el => el.textContent.trim() === '关注' || el.textContent.trim() === '關注'
+                );
+                if (followBtn) {
+                    // 找附近的私信按鈕
+                    const parent = followBtn.parentElement;
+                    if (parent) {
+                        const siblings = parent.querySelectorAll('button, div, span, a');
+                        for (const sib of siblings) {
+                            const t = (sib.textContent || '').trim();
+                            if (t.includes('私信') || t.includes('消息') || t.includes('聊')) {
+                                sib.click();
+                                return {success: true, text: t, method: 'sibling'};
+                            }
                         }
                     }
                 }
                 
-                // 調試: 返回頁面上所有按鈕文字
-                const btnTexts = [];
-                document.querySelectorAll('button, [role="button"], [class*="btn"]').forEach(b => {
-                    const t = (b.textContent || '').trim();
-                    if (t && t.length < 30) btnTexts.push(t);
+                // 方法3: 找 SVG 圖標按鈕 (有些按鈕只有圖標沒有文字)
+                const svgBtns = document.querySelectorAll('svg, [class*="icon"]');
+                svgBtns.forEach(svg => {
+                    const parent = svg.closest('button, div, a, span');
+                    if (parent) {
+                        const cls = (parent.className || '').toLowerCase();
+                        if (cls.includes('message') || cls.includes('chat') || cls.includes('dm')) {
+                            parent.click();
+                            return {success: true, method: 'icon', class: cls};
+                        }
+                    }
                 });
                 
-                return {success: false, buttons: btnTexts.slice(0, 15)};
+                // 方法4: 嘗試點擊「更多」按鈕展開菜單
+                const moreBtn = Array.from(document.querySelectorAll('button, div, span')).find(
+                    el => {
+                        const t = el.textContent.trim();
+                        return t === '更多' || t === '...' || t === '⋯';
+                    }
+                );
+                if (moreBtn) {
+                    moreBtn.click();
+                    return {success: false, needWait: true, message: '點擊了更多按鈕'};
+                }
+                
+                // 調試: 返回頁面上所有可點擊元素的文字
+                const btnTexts = [];
+                document.querySelectorAll('button, [role="button"], [class*="btn"], a').forEach(b => {
+                    const t = (b.textContent || '').trim();
+                    if (t && t.length < 30 && !btnTexts.includes(t)) btnTexts.push(t);
+                });
+                
+                return {success: false, buttons: btnTexts.slice(0, 20)};
             }""")
             
             if not clicked.get('success'):
-                logger.warning(f"找不到私信按鈕: {supplier.nickname}")
-                btns = clicked.get('buttons', [])
-                if btns:
-                    logger.info(f"  頁面按鈕: {btns[:8]}")
-                return False
+                # 如果點擊了「更多」按鈕，等一下再試
+                if clicked.get('needWait'):
+                    await delay(1, 2)
+                    # 再次嘗試找私信按鈕
+                    clicked2 = await self.page.evaluate("""() => {
+                        const allElements = document.querySelectorAll('button, div, span, a, li');
+                        for (const el of allElements) {
+                            const text = (el.textContent || '').trim();
+                            if (text === '私信' || text === '发私信' || text === '發私信' ||
+                                text === '发消息' || text === '發消息') {
+                                el.click();
+                                return {success: true, text: text};
+                            }
+                        }
+                        return {success: false};
+                    }""")
+                    if clicked2.get('success'):
+                        clicked = clicked2
+                    else:
+                        logger.warning(f"找不到私信按鈕: {supplier.nickname}")
+                        return False
+                else:
+                    logger.warning(f"找不到私信按鈕: {supplier.nickname}")
+                    btns = clicked.get('buttons', [])
+                    if btns:
+                        logger.info(f"  頁面按鈕: {btns[:10]}")
+                    # 保存截圖幫助調試
+                    try:
+                        await self.page.screenshot(path=f"debug_profile_{supplier.user_id[:8]}.png")
+                        logger.info(f"  已保存截圖: debug_profile_{supplier.user_id[:8]}.png")
+                    except:
+                        pass
+                    return False
             
             logger.info(f"  ✓ 點擊私信按鈕")
             await delay(2, 4)
