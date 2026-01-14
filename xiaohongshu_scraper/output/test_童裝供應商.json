@@ -1,0 +1,171 @@
+{
+  "export_time": "2026-01-10T15:04:55.944945",
+  "total_count": 5,
+  "suppliers": [
+    {
+      "user_id": "user_001",
+      "nickname": "童裝源頭工廠直營",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/user_001",
+      "bio": "廣州服裝批發市場，專業童裝生產工廠15年，微信：gzfactory888",
+      "followers": 15000,
+      "supplier_type": "工廠/廠家",
+      "quality_score": 100.0,
+      "score_details": {
+        "engagement": 30,
+        "contact": 25,
+        "supplier_type": 15,
+        "activity": 15,
+        "note_quality": 15
+      },
+      "primary_contact": "微信: gzfactory888",
+      "all_contacts": [
+        {
+          "type": "微信",
+          "value": "gzfactory888",
+          "source": "簡介",
+          "confidence": 0.9
+        }
+      ],
+      "notes_count": 1,
+      "best_note_url": "https://www.xiaohongshu.com/explore/note_user_001",
+      "best_note_engagement": 3900,
+      "source_keywords": [
+        "童裝代理",
+        "童裝批發"
+      ],
+      "crawl_time": "2026-01-10T15:04:55.929106"
+    },
+    {
+      "user_id": "user_005",
+      "nickname": "童裝廠家招商中",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/user_005",
+      "bio": "自有工廠，誠招全國代理，聯繫微信：changjiazs",
+      "followers": 20000,
+      "supplier_type": "工廠/廠家",
+      "quality_score": 100.0,
+      "score_details": {
+        "engagement": 30,
+        "contact": 25,
+        "supplier_type": 15,
+        "activity": 15,
+        "note_quality": 15
+      },
+      "primary_contact": "微信: changjiazs",
+      "all_contacts": [
+        {
+          "type": "微信",
+          "value": "changjiazs",
+          "source": "簡介",
+          "confidence": 1.0
+        }
+      ],
+      "notes_count": 1,
+      "best_note_url": "https://www.xiaohongshu.com/explore/note_user_005",
+      "best_note_engagement": 5200,
+      "source_keywords": [
+        "童裝代理",
+        "童裝批發"
+      ],
+      "crawl_time": "2026-01-10T15:04:55.929355"
+    },
+    {
+      "user_id": "user_002",
+      "nickname": "韓版童裝品牌方",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/user_002",
+      "bio": "原創設計師品牌，支持全國代理，v：koreastyle123",
+      "followers": 8000,
+      "supplier_type": "品牌方",
+      "quality_score": 97.0,
+      "score_details": {
+        "engagement": 30,
+        "contact": 25,
+        "supplier_type": 12,
+        "activity": 15,
+        "note_quality": 15
+      },
+      "primary_contact": "微信: koreastyle123",
+      "all_contacts": [
+        {
+          "type": "微信",
+          "value": "koreastyle123",
+          "source": "簡介",
+          "confidence": 0.6
+        }
+      ],
+      "notes_count": 1,
+      "best_note_url": "https://www.xiaohongshu.com/explore/note_user_002",
+      "best_note_engagement": 2080,
+      "source_keywords": [
+        "童裝代理",
+        "童裝批發"
+      ],
+      "crawl_time": "2026-01-10T15:04:55.929182"
+    },
+    {
+      "user_id": "user_003",
+      "nickname": "童裝一手貨源",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/user_003",
+      "bio": "檔口批發，一件代發，薇信：yishoudai666",
+      "followers": 5000,
+      "supplier_type": "經銷商/代理",
+      "quality_score": 93.0,
+      "score_details": {
+        "engagement": 30,
+        "contact": 25,
+        "supplier_type": 8,
+        "activity": 15,
+        "note_quality": 15
+      },
+      "primary_contact": "微信: yishoudai666",
+      "all_contacts": [
+        {
+          "type": "微信",
+          "value": "yishoudai666",
+          "source": "簡介",
+          "confidence": 0.6
+        }
+      ],
+      "notes_count": 1,
+      "best_note_url": "https://www.xiaohongshu.com/explore/note_user_003",
+      "best_note_engagement": 1300,
+      "source_keywords": [
+        "童裝代理",
+        "童裝批發"
+      ],
+      "crawl_time": "2026-01-10T15:04:55.929241"
+    },
+    {
+      "user_id": "user_004",
+      "nickname": "寶媽童裝代理",
+      "profile_url": "https://www.xiaohongshu.com/user/profile/user_004",
+      "bio": "全職寶媽，童裝代理3年，wx: baoma_dai",
+      "followers": 2000,
+      "supplier_type": "個人微商",
+      "quality_score": 85.0,
+      "score_details": {
+        "engagement": 30,
+        "contact": 25,
+        "supplier_type": 5,
+        "activity": 10,
+        "note_quality": 15
+      },
+      "primary_contact": "微信: baoma_dai",
+      "all_contacts": [
+        {
+          "type": "微信",
+          "value": "baoma_dai",
+          "source": "簡介",
+          "confidence": 0.9
+        }
+      ],
+      "notes_count": 1,
+      "best_note_url": "https://www.xiaohongshu.com/explore/note_user_004",
+      "best_note_engagement": 520,
+      "source_keywords": [
+        "童裝代理",
+        "童裝批發"
+      ],
+      "crawl_time": "2026-01-10T15:04:55.929300"
+    }
+  ]
+}
