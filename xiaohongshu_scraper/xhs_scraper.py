@@ -349,29 +349,41 @@ class Scraper:
         from playwright.async_api import async_playwright
         
         logger.info("啟動瀏覽器...")
-        pw = await async_playwright().start()
-        self.browser = await pw.chromium.launch(headless=HEADLESS)
-        ctx = await self.browser.new_context(
+        self.pw = await async_playwright().start()
+        
+        # 使用持久化用戶數據目錄，保存登入狀態
+        user_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser_data')
+        os.makedirs(user_data_dir, exist_ok=True)
+        
+        # 使用 launch_persistent_context 保持登入狀態
+        self.context = await self.pw.chromium.launch_persistent_context(
+            user_data_dir,
+            headless=HEADLESS,
             viewport={'width': 1920, 'height': 1080},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
             locale='zh-CN'
         )
-        # 設置 Cookie
+        
+        # 如果有 Cookie，也設置一下（作為備用）
         if self.cookie:
             cookies = []
             for item in self.cookie.split(';'):
                 if '=' in item:
                     k, v = item.strip().split('=', 1)
                     cookies.append({'name': k, 'value': v, 'domain': '.xiaohongshu.com', 'path': '/'})
-            await ctx.add_cookies(cookies)
-        self.page = await ctx.new_page()
+            await self.context.add_cookies(cookies)
+        
+        self.page = self.context.pages[0] if self.context.pages else await self.context.new_page()
         # 反偵測
         await self.page.evaluate("Object.defineProperty(navigator,'webdriver',{get:()=>undefined})")
+        self.browser = None  # 使用 context 而非 browser
         logger.info("瀏覽器就緒")
     
     async def close(self):
-        if self.browser:
-            await self.browser.close()
+        if self.context:
+            await self.context.close()
+        if hasattr(self, 'pw') and self.pw:
+            await self.pw.stop()
     
     async def get_my_uid(self):
         """獲取當前登錄用戶ID"""
@@ -1098,19 +1110,20 @@ def main():
     dm = DataManager(DATA_FILE)
     
     # 獲取 Cookie
+    # Cookie 現在是可選的，因為使用持久化登入
     if not COOKIE:
-        print("📌 請輸入小紅書 Cookie（直接貼上後按 Enter）：")
-        print("   獲取方法：登錄 xiaohongshu.com → F12 → Network → 複製 Cookie")
+        print("💡 提示：首次使用請選擇「0. 手動登入」")
+        print("   如果已登入過，可直接選擇其他操作")
         print()
+        print("   (可選) 輸入 Cookie 或直接按 Enter 跳過：")
         COOKIE = input("Cookie: ").strip()
-    
-    if not COOKIE:
-        print("\n⚠️ 未輸入 Cookie，程序退出")
-        return
+        if not COOKIE:
+            print("   → 跳過 Cookie，將使用已保存的登入狀態")
     
     while True:
         print("\n" + "="*50)
         print("請選擇操作:")
+        print("  0. 🔐 手動登入小紅書 (首次使用必選)")
         print("  1. 🔍 搜索供應商")
         print("  2. 💬 發送私訊 (暗語)")
         print("  3. 📥 檢查回覆")
@@ -1119,9 +1132,52 @@ def main():
         print("  6. 🚪 退出")
         print("="*50)
         
-        choice = input("\n請輸入選項 (1-6): ").strip()
+        choice = input("\n請輸入選項 (0-6): ").strip()
         
-        if choice == '1':
+        if choice == '0':
+            # 手動登入
+            print("\n🔐 手動登入模式")
+            print("將打開瀏覽器，請手動掃碼登入小紅書")
+            print("登入成功後，關閉瀏覽器窗口即可")
+            input("\n按 Enter 打開瀏覽器...")
+            
+            async def manual_login():
+                from playwright.async_api import async_playwright
+                
+                user_data_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'browser_data')
+                os.makedirs(user_data_dir, exist_ok=True)
+                
+                pw = await async_playwright().start()
+                context = await pw.chromium.launch_persistent_context(
+                    user_data_dir,
+                    headless=False,  # 必須顯示窗口
+                    viewport={'width': 1280, 'height': 800},
+                    user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
+                    locale='zh-CN'
+                )
+                
+                page = context.pages[0] if context.pages else await context.new_page()
+                await page.goto("https://www.xiaohongshu.com")
+                
+                print("\n⏳ 請在瀏覽器中登入小紅書...")
+                print("   登入成功後，請關閉瀏覽器窗口")
+                
+                # 等待用戶關閉瀏覽器
+                try:
+                    await page.wait_for_event('close', timeout=300000)  # 5分鐘超時
+                except:
+                    pass
+                
+                await context.close()
+                await pw.stop()
+                print("\n✅ 登入狀態已保存！")
+            
+            try:
+                asyncio.run(manual_login())
+            except Exception as e:
+                print(f"\n錯誤: {e}")
+        
+        elif choice == '1':
             # 搜索供應商
             print(f"\n🔍 關鍵字: {KEYWORDS}")
             print(f"⏱️ 每個關鍵字 {MAX_PAGES} 頁")
@@ -1215,7 +1271,7 @@ def main():
             break
         
         else:
-            print("\n⚠️ 無效選項，請輸入 1-6")
+            print("\n⚠️ 無效選項，請輸入 0-6")
 
 if __name__ == "__main__":
     main()
