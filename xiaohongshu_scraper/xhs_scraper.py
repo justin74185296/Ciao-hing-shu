@@ -40,6 +40,7 @@ KEYWORDS = [
 
 MAX_PAGES = 2  # 每個關鍵字最大頁數
 MAX_SUPPLIERS = 50  # 最大供應商數量
+HEADLESS = False  # 設為 False 可以看到瀏覽器操作 (調試用)
 
 # ========== 暗語私訊配置 ==========
 ENABLE_MESSAGE = True  # 是否啟用私訊功能
@@ -349,7 +350,7 @@ class Scraper:
         
         logger.info("啟動瀏覽器...")
         pw = await async_playwright().start()
-        self.browser = await pw.chromium.launch(headless=True)
+        self.browser = await pw.chromium.launch(headless=HEADLESS)
         ctx = await self.browser.new_context(
             viewport={'width': 1920, 'height': 1080},
             user_agent="Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/120.0.0.0 Safari/537.36",
@@ -704,45 +705,120 @@ class Scraper:
             await self.page.goto(supplier.profile_url, wait_until='domcontentloaded', timeout=60000)
             await delay(3, 5)
             
-            # 點擊私信按鈕
-            msg_btn = await self.page.query_selector('button:has-text("私信"), [class*="message"], [class*="chat"]')
-            if not msg_btn:
-                # 嘗試其他選擇器
-                msg_btn = await self.page.evaluate('''() => {
-                    const btns = document.querySelectorAll('button, a, span');
-                    for (let btn of btns) {
-                        if (btn.textContent && btn.textContent.includes('私信')) {
-                            btn.click();
-                            return true;
+            # 嘗試多種方式找到並點擊私信按鈕
+            clicked = await self.page.evaluate("""() => {
+                // 找所有元素
+                const allElements = document.querySelectorAll('button, div, span, a');
+                
+                for (const el of allElements) {
+                    const text = (el.textContent || '').trim();
+                    // 精確匹配「私信」
+                    if (text === '私信' || text === '发私信' || text === '發私信') {
+                        // 確保元素可見
+                        const rect = el.getBoundingClientRect();
+                        if (rect.width > 0 && rect.height > 0) {
+                            el.click();
+                            return {success: true, text: text};
                         }
                     }
-                    return false;
-                }''')
-                if not msg_btn:
-                    logger.warning(f"找不到私信按鈕: {supplier.nickname}")
-                    return False
-            else:
-                await msg_btn.click()
+                }
+                
+                // 備用: 找 class 包含相關關鍵詞的元素
+                const selectors = [
+                    '[class*="message"]',
+                    '[class*="chat"]', 
+                    '[class*="interact"]',
+                    '[class*="btn"]'
+                ];
+                
+                for (const sel of selectors) {
+                    const elements = document.querySelectorAll(sel);
+                    for (const el of elements) {
+                        const text = (el.textContent || '').trim();
+                        if (text.includes('私信') && text.length < 10) {
+                            el.click();
+                            return {success: true, text: text, selector: sel};
+                        }
+                    }
+                }
+                
+                // 調試: 返回頁面上所有按鈕文字
+                const btnTexts = [];
+                document.querySelectorAll('button, [role="button"], [class*="btn"]').forEach(b => {
+                    const t = (b.textContent || '').trim();
+                    if (t && t.length < 30) btnTexts.push(t);
+                });
+                
+                return {success: false, buttons: btnTexts.slice(0, 15)};
+            }""")
             
+            if not clicked.get('success'):
+                logger.warning(f"找不到私信按鈕: {supplier.nickname}")
+                btns = clicked.get('buttons', [])
+                if btns:
+                    logger.info(f"  頁面按鈕: {btns[:8]}")
+                return False
+            
+            logger.info(f"  ✓ 點擊私信按鈕")
             await delay(2, 4)
             
-            # 等待對話框出現並輸入訊息
-            input_box = await self.page.query_selector('textarea, input[type="text"], [contenteditable="true"], [class*="input"]')
-            if not input_box:
+            # 等待聊天窗口出現
+            await self.page.wait_for_timeout(2000)
+            
+            # 嘗試多種輸入框選擇器
+            input_found = await self.page.evaluate("""() => {
+                const selectors = [
+                    'textarea',
+                    '[contenteditable="true"]',
+                    'input[type="text"]',
+                    '[class*="editor"]',
+                    '[class*="input"]',
+                    '[class*="textarea"]'
+                ];
+                
+                for (const sel of selectors) {
+                    const inputs = document.querySelectorAll(sel);
+                    for (const inp of inputs) {
+                        const rect = inp.getBoundingClientRect();
+                        if (rect.width > 50 && rect.height > 15) {
+                            inp.focus();
+                            inp.click();
+                            return {found: true, selector: sel};
+                        }
+                    }
+                }
+                return {found: false};
+            }""")
+            
+            if not input_found.get('found'):
                 logger.warning(f"找不到輸入框: {supplier.nickname}")
                 return False
             
-            await input_box.click()
+            logger.info(f"  ✓ 找到輸入框")
             await delay(0.5, 1)
-            await input_box.fill(message)
+            
+            # 使用鍵盤輸入訊息 (更可靠)
+            await self.page.keyboard.type(message, delay=30)
             await delay(1, 2)
             
-            # 點擊發送按鈕
-            send_btn = await self.page.query_selector('button:has-text("發送"), button:has-text("发送"), [class*="send"]')
-            if send_btn:
-                await send_btn.click()
-            else:
-                # 嘗試按 Enter
+            # 發送訊息
+            send_result = await self.page.evaluate("""() => {
+                const btns = document.querySelectorAll('button, div, span');
+                for (const btn of btns) {
+                    const text = (btn.textContent || '').trim();
+                    if (text === '发送' || text === '發送') {
+                        const rect = btn.getBoundingClientRect();
+                        if (rect.width > 0) {
+                            btn.click();
+                            return {clicked: true};
+                        }
+                    }
+                }
+                return {clicked: false};
+            }""")
+            
+            if not send_result.get('clicked'):
+                # 嘗試按 Enter 發送
                 await self.page.keyboard.press('Enter')
             
             await delay(2, 3)
